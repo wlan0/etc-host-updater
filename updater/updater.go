@@ -10,8 +10,18 @@ import (
 	"github.com/rancher/go-rancher-metadata/metadata"
 )
 
+var (
+	hostsWorkingFile = "/etc/hosts.backup"
+	hostsOrigFile    = "/etc/hosts"
+)
+
+// MetadataClient - This abstraction allows this to be mocked easily in tests
+type MetadataClient interface {
+	GetHosts() ([]metadata.Host, error)
+}
+
 type Updater struct {
-	MetadataClient *metadata.Client
+	MetadataClient MetadataClient
 	rancherHosts   map[string]string
 }
 
@@ -77,12 +87,10 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 		rancherHosts[k] = v
 	}
 
-	hostsWorkingFile := "/etc/hosts.backup"
-
 	if _, err := os.Stat(hostsWorkingFile); os.IsNotExist(err) {
 		// This is done to maintain a copy of the original contents
 		// of the hosts file
-		hostData, err := ioutil.ReadFile("/etc/hosts")
+		hostData, err := ioutil.ReadFile(hostsOrigFile)
 		if err != nil {
 			return err
 		}
@@ -93,9 +101,11 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 		}
 	}
 	hostData, err := ioutil.ReadFile(hostsWorkingFile)
+	if err != nil {
+		return err
+	}
 
 	lines := strings.Split(string(hostData), "\n")
-
 	for _, line := range lines {
 		if len(line) == 0 || line[0] == '#' {
 			continue
@@ -123,5 +133,5 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 		toWrite = toWrite + fmt.Sprintf("%s\t%s\n", v, k)
 	}
 
-	return ioutil.WriteFile("/etc/hosts", []byte(toWrite), 0644)
+	return ioutil.WriteFile(hostsOrigFile, []byte(toWrite), 0644)
 }
