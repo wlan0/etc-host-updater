@@ -1,4 +1,4 @@
-hostname-update-service
+etc-host-updater
 ========
 
 populates /etc/hosts of a rancher container based on currently registered hosts in a given environment
@@ -10,7 +10,7 @@ populates /etc/hosts of a rancher container based on currently registered hosts 
 
 ## Running
 
-`./bin/hostname-update-service`
+`./bin/etc-host-updater`
 
 ## License
 Copyright (c) 2014-2016 [Rancher Labs, Inc.](http://rancher.com)

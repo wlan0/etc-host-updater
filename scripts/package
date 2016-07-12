@@ -8,7 +8,7 @@ cd $(dirname $0)/../package
 TAG=${TAG:-${VERSION}}
 REPO=${REPO:-rancher}
 
-cp ../bin/hostname-update-service .
-docker build -t ${REPO}/hostname-update-service:${TAG} .
+cp ../bin/etc-host-updater .
+docker build -t ${REPO}/etc-host-updater:${TAG} .
 
-echo Built ${REPO}/hostname-update-service:${TAG}
+echo Built ${REPO}/etc-host-updater:${TAG}

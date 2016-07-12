@@ -5,8 +5,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	"github.com/rancher/etc-host-updater/updater"
 	"github.com/rancher/go-rancher-metadata/metadata"
-	"github.com/rancher/hostname-update-service/updater"
 )
 
 const (

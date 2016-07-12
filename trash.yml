@@ -1,4 +1,4 @@
-package: github.com/rancher/hostname-update-service
+package: github.com/rancher/etc-host-updater
 
 import:
 - package: github.com/Sirupsen/logrus
