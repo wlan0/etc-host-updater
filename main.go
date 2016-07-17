@@ -10,8 +10,11 @@ import (
 )
 
 const (
-	VERSION     = "0.0.1"
 	metadataURL = "http://rancher-metadata/2015-12-19"
+)
+
+var (
+	VERSION = "dev"
 )
 
 func main() {
