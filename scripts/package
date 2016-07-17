@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+
+source $(dirname $0)/version
+
+cd $(dirname $0)/../package
+
+TAG=${TAG:-${VERSION}}
+REPO=${REPO:-rancher}
+
+cp ../bin/etc-host-updater .
+docker build -t ${REPO}/etc-host-updater:${TAG} .
+
+echo Built ${REPO}/etc-host-updater:${TAG}
