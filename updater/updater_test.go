@@ -45,21 +45,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("Error running test, Could not create Temp file [%v]", err)
 	}
-	_, err = tmpFile.WriteString("127.0.0.1	localhost")
-	if err != nil {
-		log.Fatalf("Error running test, Could not write init contents into Temp file [%v]", err)
-	}
-	err = tmpFile.Close()
-	if err != nil {
-		log.Fatalf("Error running test, Could not close Temp file [%v]", err)
-	}
+	upd.origData = "127.0.0.1    localhost localhost-ip4"
 	hostsOrigFile = tmpFile.Name()
-	hostsWorkingFile = hostsOrigFile + ".backup"
 
 	defer os.Remove(hostsOrigFile)
-	defer os.Remove(hostsWorkingFile)
 
-	upd.Run("")
 	os.Exit(m.Run())
 }
 
@@ -72,13 +62,13 @@ func TestDetectsHostIpChange(t *testing.T) {
 		},
 	}
 	upd.Run("")
-	hostsMap, err := hostsFileToMap(hostsOrigFile)
+	hostsMap, err := parseHostsOrigFile(hostsOrigFile)
 	client.lock.Unlock()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if len(hostsMap) != 2 {
-		t.Fatalf("Expected 2 entires, found %d", len(hostsMap))
+	if len(hostsMap) != 3 {
+		t.Fatalf("Expected 3 entires, found %d", len(hostsMap))
 	}
 	v, ok := hostsMap["Host1"]
 	if !ok {
@@ -102,13 +92,13 @@ func TestDetectsHostIpChange(t *testing.T) {
 		},
 	}
 	upd.Run("")
-	hostsMap, err = hostsFileToMap(hostsOrigFile)
+	hostsMap, err = parseHostsOrigFile(hostsOrigFile)
 	client.lock.Unlock()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if len(hostsMap) != 2 {
-		t.Fatalf("Expected 2 entires, found %d", len(hostsMap))
+	if len(hostsMap) != 3 {
+		t.Fatalf("Expected 3 entires, found %d", len(hostsMap))
 	}
 	v, ok = hostsMap["Host1"]
 	if !ok {
@@ -135,13 +125,13 @@ func TestDetectsHostAddition(t *testing.T) {
 		},
 	}
 	upd.Run("")
-	hostsMap, err := hostsFileToMap(hostsOrigFile)
+	hostsMap, err := parseHostsOrigFile(hostsOrigFile)
 	client.lock.Unlock()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if len(hostsMap) != 2 {
-		t.Fatalf("Expected 2 entires, found %d", len(hostsMap))
+	if len(hostsMap) != 3 {
+		t.Fatalf("Expected 3 entires, found %d", len(hostsMap))
 	}
 	v, ok := hostsMap["Host1"]
 	if !ok {
@@ -169,13 +159,13 @@ func TestDetectsHostAddition(t *testing.T) {
 		},
 	}
 	upd.Run("")
-	hostsMap, err = hostsFileToMap(hostsOrigFile)
+	hostsMap, err = parseHostsOrigFile(hostsOrigFile)
 	client.lock.Unlock()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if len(hostsMap) != 3 {
-		t.Fatalf("Expected 3 entires, found %d", len(hostsMap))
+	if len(hostsMap) != 4 {
+		t.Fatalf("Expected 4 entires, found %d", len(hostsMap))
 	}
 	v, ok = hostsMap["Host1"]
 	if !ok {
@@ -213,13 +203,13 @@ func TestDetectsHostDeletion(t *testing.T) {
 		},
 	}
 	upd.Run("")
-	hostsMap, err := hostsFileToMap(hostsOrigFile)
+	hostsMap, err := parseHostsOrigFile(hostsOrigFile)
 	client.lock.Unlock()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if len(hostsMap) != 3 {
-		t.Fatalf("Expected 3 entires, found %d", len(hostsMap))
+	if len(hostsMap) != 4 {
+		t.Fatalf("Expected 4 entires, found %d", len(hostsMap))
 	}
 	v, ok := hostsMap["Host1"]
 	if !ok {
@@ -250,13 +240,13 @@ func TestDetectsHostDeletion(t *testing.T) {
 		},
 	}
 	upd.Run("")
-	hostsMap, err = hostsFileToMap(hostsOrigFile)
+	hostsMap, err = parseHostsOrigFile(hostsOrigFile)
 	client.lock.Unlock()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if len(hostsMap) != 2 {
-		t.Fatalf("Expected 2 entires, found %d", len(hostsMap))
+	if len(hostsMap) != 3 {
+		t.Fatalf("Expected 3 entires, found %d", len(hostsMap))
 	}
 	v, ok = hostsMap["Host1"]
 	if !ok {
@@ -274,34 +264,22 @@ func TestDetectsHostDeletion(t *testing.T) {
 	}
 }
 
-func hostsFileToMap(name string) (map[string]string, error) {
-	hostsMap := map[string]string{}
-	hostData, err := ioutil.ReadFile(name)
+func parseHostsOrigFile(file string) (map[string]string, error) {
+	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-
-	lines := strings.Split(string(hostData), "\n")
-	for _, line := range lines {
-		if len(line) == 0 || line[0] == '#' {
+	hostsMap := map[string]string{}
+	lines := string(data)
+	for _, line := range strings.Split(lines, "\n") {
+		elements := strings.Split(line, "    ")
+		if len(elements) < 2 {
 			continue
 		}
-		ip := ""
-		stage2 := false
-		hostnames := ""
-		for _, val := range line {
-			if val == '\t' || val == ' ' {
-				stage2 = true
-				continue
-			}
-			if !stage2 {
-				ip = ip + string(val)
-				continue
-			}
-			hostnames = hostnames + string(val)
-
+		names := strings.Split(strings.Trim(elements[1], " "), " ")
+		for _, name := range names {
+			hostsMap[name] = elements[0]
 		}
-		hostsMap[strings.Trim(hostnames, " ")] = strings.Trim(ip, " ")
 	}
 	return hostsMap, nil
 }

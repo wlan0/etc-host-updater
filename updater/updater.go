@@ -3,16 +3,15 @@ package updater
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/rancher/go-rancher-metadata/metadata"
 )
 
 var (
-	hostsWorkingFile = "/etc/hosts.backup"
-	hostsOrigFile    = "/etc/hosts"
+	hostsOrigFile = "/etc/hosts"
 )
 
 // MetadataClient - This abstraction allows this to be mocked easily in tests
@@ -23,11 +22,37 @@ type MetadataClient interface {
 type Updater struct {
 	MetadataClient MetadataClient
 	rancherHosts   map[string]string
+	origData       string
 }
 
 func (u *Updater) Run(string) {
 	if u.rancherHosts == nil {
 		u.rancherHosts = make(map[string]string)
+	}
+	if u.origData == "" {
+		u.origData = `127.0.0.1    localhost
+::1    localhost ip6-localhost ip6-loopback
+fe00::0    ip6-localnet
+ff00::0    ip6-mcastprefix
+ff02::1    ip6-allnodes
+ff02::2    ip6-allrouters
+`
+
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Errorf("Error getting hostname of host: %v", err)
+			return
+		}
+		ips, err := net.LookupIP(hostname)
+		if err != nil {
+			log.Errorf("Error getting IP addresses of host %s, err: %v", hostname, err)
+			return
+		}
+		if len(ips) == 0 {
+			log.Errorf("Error getting IP address of host %s, err: No IPs found", hostname)
+			return
+		}
+		u.origData = u.origData + ips[0].String() + "    " + hostname
 	}
 	err := u.Update(u.rancherHosts)
 	if err != nil {
@@ -56,6 +81,7 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 			// previous set of rancher hosts, then a new host
 			// was added
 			changed = true
+			log.Infof("Adding Host %s %s", host.Hostname, host.AgentIP)
 		}
 		hostsMap[host.Hostname] = host.AgentIP
 	}
@@ -63,6 +89,7 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 	for rHost := range rancherHosts {
 		// a host was deleted
 		if _, ok := hostsMap[rHost]; !ok {
+			log.Infof("Deleting host %s", rHost)
 			changed = true
 		}
 	}
@@ -75,8 +102,6 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 		return err
 	}
 
-	log.Info("change detected in rancher hosts")
-
 	// sycnchronize rancherHosts to be the same as
 	// the current view of rancher hosts from metadata service
 	for k := range rancherHosts {
@@ -87,50 +112,10 @@ func (u *Updater) Update(rancherHosts map[string]string) error {
 		rancherHosts[k] = v
 	}
 
-	if _, err := os.Stat(hostsWorkingFile); os.IsNotExist(err) {
-		// This is done to maintain a copy of the original contents
-		// of the hosts file
-		hostData, err := ioutil.ReadFile(hostsOrigFile)
-		if err != nil {
-			return err
-		}
+	toWrite := u.origData + "\n"
 
-		err = ioutil.WriteFile(hostsWorkingFile, hostData, 0644)
-		if err != nil {
-			return err
-		}
-	}
-	hostData, err := ioutil.ReadFile(hostsWorkingFile)
-	if err != nil {
-		return err
-	}
-
-	lines := strings.Split(string(hostData), "\n")
-	for _, line := range lines {
-		if len(line) == 0 || line[0] == '#' {
-			continue
-		}
-		ip := ""
-		stage2 := false
-		hostnames := ""
-		for _, val := range line {
-			if val == '\t' || val == ' ' {
-				stage2 = true
-				continue
-			}
-			if !stage2 {
-				ip = ip + string(val)
-				continue
-			}
-			hostnames = hostnames + string(val)
-
-		}
-		hostsMap[strings.Trim(hostnames, " ")] = strings.Trim(ip, " ")
-	}
-
-	toWrite := ""
 	for k, v := range hostsMap {
-		toWrite = toWrite + fmt.Sprintf("%s\t%s\n", v, k)
+		toWrite = toWrite + fmt.Sprintf("%s    %s\n", v, k)
 	}
 
 	return ioutil.WriteFile(hostsOrigFile, []byte(toWrite), 0644)
